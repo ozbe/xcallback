@@ -6,11 +6,11 @@ use macos::foundation::*;
 use macos::{impl_objc_class, Id, ObjCClass};
 use objc::declare::ClassDecl;
 use objc::runtime::*;
-use std::ops::Deref;
 use std::sync::mpsc::Sender;
 use std::sync::{mpsc, Once};
 use std::thread;
 use structopt::StructOpt;
+use url::Url;
 
 #[derive(Debug, StructOpt)]
 /// Interact with x-callback-url APIs
@@ -34,7 +34,8 @@ struct CallbackOpts {
     /// Space delimited URL encoded x-callback-url parameters
     ///
     /// Example: title=My%20Note%20Title text=First%20line
-    parameters: Vec<String>,
+    #[structopt(parse(try_from_str = parse_parameter))]
+    parameters: Vec<(String, String)>,
 }
 
 const HOST: &str = "x-callback-url";
@@ -52,14 +53,24 @@ fn cli() {
     unsafe { SENDER = Some(sender) };
 
     let opts = CallbackOpts::from_args();
-    let url = opts_to_url(&opts);
-
-    execute(&url);
+    let execute_url = opts_to_url(&opts);
+    execute(&execute_url);
 
     let result = receiver.recv().unwrap();
-    println!("{}", result);
+    let callback_url = Url::parse(&result).unwrap();
+    print_parameters(&callback_url);
 
     terminate_ns_app();
+}
+
+fn print_parameters(url: &Url) {
+    if let Some(query) = url.query() {
+        for parameter in query.split("&") {
+            if !parameter.is_empty() {
+                println!("{}", parameter)
+            }
+        }
+    }
 }
 
 fn run_ns_app() {
@@ -74,37 +85,38 @@ fn terminate_ns_app() {
     app.terminate(&app);
 }
 
-fn execute(url: &str) {
+fn execute(url: &Url) {
     NSWorkspace::shared_workspace()
-        .open_url(NSURL::from(NSString::from(url)))
+        .open_url(NSURL::from(NSString::from(url.as_str())))
 }
 
-fn opts_to_url(opts: &CallbackOpts) -> String {
+fn opts_to_url(opts: &CallbackOpts) -> Url {
+    let mut url = Url::parse(&format!(
+        "{scheme}://{host}/{action}",
+        scheme = opts.scheme,
+        host = HOST,
+        action = opts.action,
+    )).unwrap();
+
     let callback_parameters = vec![
-        format!("x-source={}", "Callback"),
-        format!("x-success={}", CALLBACK_ADDR),
-        format!("x-error={}", CALLBACK_ADDR),
-        format!("x-cancel={}", CALLBACK_ADDR),
+        ("x-source", "Callback"),
+        ("x-success", CALLBACK_ADDR),
+        ("x-error", CALLBACK_ADDR),
+        ("x-cancel", CALLBACK_ADDR),
     ];
 
-    let parameters: Vec<&str> = opts
-        .parameters
-        .iter()
-        .chain(callback_parameters.iter())
-        .map(|p| p.deref())
-        .collect();
+    url.query_pairs_mut()
+        .extend_pairs(&opts.parameters)
+        .extend_pairs(&callback_parameters);
+    url
+}
 
-    format!(
-        "{scheme}://{host}/{action}{query}",
-        host = HOST,
-        scheme = opts.scheme,
-        action = opts.action,
-        query = format!(
-            "{prefix}{parameters}",
-            prefix = if parameters.is_empty() { "" } else { "?" },
-            parameters = parameters.join("&")
-        )
-    )
+fn parse_parameter(src: &str) -> Result<(String, String), String> {
+    let split: Vec<&str> = src.split("=").collect();
+    match split[..] {
+        [first, second] => Ok((first.to_string(), second.to_string())),
+        _ => Err("Invalid parameter format".to_string())
+    }
 }
 
 impl_objc_class!(AppDelegate);
