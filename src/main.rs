@@ -65,7 +65,7 @@ fn cli() {
 
 fn print_parameters(url: &Url) {
     if let Some(query) = url.query() {
-        for parameter in query.split("&") {
+        for parameter in query.split('&') {
             if !parameter.is_empty() {
                 println!("{}", parameter)
             }
@@ -112,7 +112,7 @@ fn opts_to_url(opts: &CallbackOpts) -> Url {
 }
 
 fn parse_parameter(src: &str) -> Result<(String, String), String> {
-    let split: Vec<&str> = src.split("=").collect();
+    let split: Vec<&str> = src.split('=').collect();
     match split[..] {
         [first, second] => Ok((first.to_string(), second.to_string())),
         _ => Err("Invalid parameter format".to_string()),
