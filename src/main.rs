@@ -9,7 +9,7 @@ use macos::foundation::*;
 use macos::{impl_objc_class, Id, ObjCClass};
 use objc::declare::ClassDecl;
 use objc::runtime::*;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{Sender, Receiver};
 use std::sync::{mpsc, Once};
 use std::thread;
 use structopt::StructOpt;
@@ -46,6 +46,10 @@ const CALLBACK_SOURCE: &str = "callback";
 const RELATIVE_PATH_SUCCESS: &str = "success";
 const RELATIVE_PATH_ERROR: &str = "error";
 const RELATIVE_PATH_CANCEL: &str = "cancel";
+const CALLBACK_PARAM_KEY_SOURCE: &str = "x-source";
+const CALLBACK_PARAM_KEY_SUCCESS: &str = "x-success";
+const CALLBACK_PARAM_KEY_ERROR: &str = "x-error";
+const CALLBACK_PARAM_KEY_CANCEL: &str = "x-cancel";
 
 lazy_static! {
     static ref CALLBACK_URL_BASE: Url = {
@@ -65,14 +69,12 @@ lazy_static! {
 static mut SENDER: Option<Sender<String>> = None;
 
 fn main() {
-    thread::spawn(cli);
-    run_ns_app();
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || cli(receiver));
+    run_ns_app(sender);
 }
 
-fn cli() {
-    let (sender, receiver) = mpsc::channel();
-    unsafe { SENDER = Some(sender) };
-
+fn cli(receiver: Receiver<String>) {
     let opts = CallbackOpts::from_args();
     let execute_url = opts_to_url(&opts);
     execute(&execute_url);
@@ -82,30 +84,6 @@ fn cli() {
     print_url(&callback_url);
 
     terminate_ns_app();
-}
-
-fn print_url(url: &Url) {
-    println!("{}", url.path().trim_start_matches('/'));
-
-    if let Some(query) = url.query() {
-        for parameter in query.split('&') {
-            if !parameter.is_empty() {
-                println!("{}", parameter)
-            }
-        }
-    }
-}
-
-fn run_ns_app() {
-    let delegate = AppDelegate::new();
-    let app = nsapp();
-    app.set_delegate(&delegate);
-    app.run();
-}
-
-fn terminate_ns_app() {
-    let app = nsapp();
-    app.terminate(&app);
 }
 
 fn execute(url: &Url) {
@@ -119,13 +97,13 @@ fn opts_to_url(opts: &CallbackOpts) -> Url {
         host = HOST,
         action = opts.action,
     ))
-    .unwrap();
+        .unwrap();
 
     let callback_parameters = vec![
-        ("x-source", CALLBACK_SOURCE),
-        ("x-success", CALLBACK_URL_SUCCESS.as_str()),
-        ("x-error", CALLBACK_URL_ERROR.as_str()),
-        ("x-cancel", CALLBACK_URL_CANCEL.as_str()),
+        (CALLBACK_PARAM_KEY_SOURCE, CALLBACK_SOURCE),
+        (CALLBACK_PARAM_KEY_SUCCESS, CALLBACK_URL_SUCCESS.as_str()),
+        (CALLBACK_PARAM_KEY_ERROR, CALLBACK_URL_ERROR.as_str()),
+        (CALLBACK_PARAM_KEY_CANCEL, CALLBACK_URL_CANCEL.as_str()),
     ];
 
     url.query_pairs_mut()
@@ -140,6 +118,31 @@ fn parse_parameter(src: &str) -> Result<(String, String), String> {
         [first, second] => Ok((first.to_string(), second.to_string())),
         _ => Err("Invalid parameter format".to_string()),
     }
+}
+
+fn print_url(url: &Url) {
+    println!("{}", url.path().trim_start_matches('/'));
+
+    if let Some(query) = url.query() {
+        for parameter in query.split('&') {
+            if !parameter.is_empty() {
+                println!("{}", parameter)
+            }
+        }
+    }
+}
+
+fn run_ns_app(sender: Sender<String>) {
+    unsafe { SENDER = Some(sender) };
+    let delegate = AppDelegate::new();
+    let app = nsapp();
+    app.set_delegate(&delegate);
+    app.run();
+}
+
+fn terminate_ns_app() {
+    let app = nsapp();
+    app.terminate(&app);
 }
 
 impl_objc_class!(AppDelegate);
