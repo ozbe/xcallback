@@ -89,7 +89,7 @@ checksum = "99e85c08494b21a9054e7fe1374a732aeadaff3980b6990b94bfd3a70f690005"
 [[package]]
 name = "macos"
 version = "0.1.0"
-source = "git+https://github.com/ozbe/webkitten#1c0b9ae2b21870eb2f1245f76de02a1a2a069918"
+source = "git+https://github.com/ozbe/webkitten?branch=x-callback-url#b140bc6e0bfc526f47e27c1c6a618e44b7279f52"
 dependencies = [
  "block",
  "libc",

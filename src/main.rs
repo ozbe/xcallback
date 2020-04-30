@@ -3,7 +3,7 @@ extern crate objc;
 
 use macos::appkit::*;
 use macos::foundation::*;
-use macos::{impl_objc_class, nil, Id, ObjCClass};
+use macos::{impl_objc_class, Id, ObjCClass};
 use objc::declare::ClassDecl;
 use objc::runtime::*;
 use std::ops::Deref;
@@ -71,7 +71,7 @@ fn run_ns_app() {
 
 fn terminate_ns_app() {
     let app = nsapp();
-    unsafe { msg_send![app.ptr(), terminate: nil] }
+    app.terminate(&app);
 }
 
 fn execute(url: &str) {

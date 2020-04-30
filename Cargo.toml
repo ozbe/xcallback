@@ -5,6 +5,6 @@ authors = ["ozbe <1372945+ozbe@users.noreply.github.com>"]
 edition = "2018"
 
 [dependencies]
-macos = { git = "https://github.com/ozbe/webkitten" }
+macos = { git = "https://github.com/ozbe/webkitten", branch = "x-callback-url" }
 objc = "0.2.7"
 structopt = "0.3.14"
