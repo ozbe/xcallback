@@ -1,6 +1,9 @@
 #[macro_use]
 extern crate objc;
 
+#[macro_use]
+extern crate lazy_static;
+
 use macos::appkit::*;
 use macos::foundation::*;
 use macos::{impl_objc_class, Id, ObjCClass};
@@ -39,7 +42,25 @@ struct CallbackOpts {
 }
 
 const HOST: &str = "x-callback-url";
-const CALLBACK_ADDR: &str = "callback://x-callback-url";
+const CALLBACK_SOURCE: &str = "callback";
+const RELATIVE_PATH_SUCCESS: &str = "success";
+const RELATIVE_PATH_ERROR: &str = "error";
+const RELATIVE_PATH_CANCEL: &str = "cancel";
+
+lazy_static! {
+    static ref CALLBACK_URL_BASE: Url = {
+        // The stand-in `action` in the path serves to avoid a problem where Url
+        // parses the Url successfully, but when a path is set later, the Url
+        // serialization is missing the '/` between the host and path.
+        let mut url = Url::parse("callback://x-callback-url/action").unwrap();
+        url.set_path("");
+        url
+    };
+    static ref CALLBACK_URL_SUCCESS: Url =
+        { CALLBACK_URL_BASE.join(RELATIVE_PATH_SUCCESS).unwrap() };
+    static ref CALLBACK_URL_ERROR: Url = { CALLBACK_URL_BASE.join(RELATIVE_PATH_ERROR).unwrap() };
+    static ref CALLBACK_URL_CANCEL: Url = { CALLBACK_URL_BASE.join(RELATIVE_PATH_CANCEL).unwrap() };
+}
 
 static mut SENDER: Option<Sender<String>> = None;
 
@@ -58,12 +79,14 @@ fn cli() {
 
     let result = receiver.recv().unwrap();
     let callback_url = Url::parse(&result).unwrap();
-    print_parameters(&callback_url);
+    print_url(&callback_url);
 
     terminate_ns_app();
 }
 
-fn print_parameters(url: &Url) {
+fn print_url(url: &Url) {
+    println!("{}", url.path().trim_start_matches('/'));
+
     if let Some(query) = url.query() {
         for parameter in query.split('&') {
             if !parameter.is_empty() {
@@ -99,10 +122,10 @@ fn opts_to_url(opts: &CallbackOpts) -> Url {
     .unwrap();
 
     let callback_parameters = vec![
-        ("x-source", "Callback"),
-        ("x-success", CALLBACK_ADDR),
-        ("x-error", CALLBACK_ADDR),
-        ("x-cancel", CALLBACK_ADDR),
+        ("x-source", CALLBACK_SOURCE),
+        ("x-success", CALLBACK_URL_SUCCESS.as_str()),
+        ("x-error", CALLBACK_URL_ERROR.as_str()),
+        ("x-cancel", CALLBACK_URL_CANCEL.as_str()),
     ];
 
     url.query_pairs_mut()
