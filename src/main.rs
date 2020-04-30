@@ -86,8 +86,7 @@ fn terminate_ns_app() {
 }
 
 fn execute(url: &Url) {
-    NSWorkspace::shared_workspace()
-        .open_url(NSURL::from(NSString::from(url.as_str())))
+    NSWorkspace::shared_workspace().open_url(NSURL::from(NSString::from(url.as_str())))
 }
 
 fn opts_to_url(opts: &CallbackOpts) -> Url {
@@ -96,7 +95,8 @@ fn opts_to_url(opts: &CallbackOpts) -> Url {
         scheme = opts.scheme,
         host = HOST,
         action = opts.action,
-    )).unwrap();
+    ))
+    .unwrap();
 
     let callback_parameters = vec![
         ("x-source", "Callback"),
@@ -115,7 +115,7 @@ fn parse_parameter(src: &str) -> Result<(String, String), String> {
     let split: Vec<&str> = src.split("=").collect();
     match split[..] {
         [first, second] => Ok((first.to_string(), second.to_string())),
-        _ => Err("Invalid parameter format".to_string())
+        _ => Err("Invalid parameter format".to_string()),
     }
 }
 
@@ -134,13 +134,13 @@ impl Default for AppDelegate {
         REGISTER_CUSTOM_CLASS.call_once(|| {
             let mut decl = ClassDecl::new(AppDelegate::class_name(), class!(NSObject)).unwrap();
 
-            extern fn app_will_finish_launching(this: &mut Object, _cmd: Sel, _note: Id) {
+            extern "C" fn app_will_finish_launching(this: &mut Object, _cmd: Sel, _note: Id) {
                 if let Some(delegate) = AppDelegate::from_ptr(this) {
                     NSAppleEventManager::shared_manager().set_get_url_event_handler(&delegate);
                 }
             }
 
-            extern fn event_handler_handle_get_url(
+            extern "C" fn event_handler_handle_get_url(
                 _: &mut Object,
                 _cmd: Sel,
                 event: Id,
