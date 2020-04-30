@@ -60,6 +60,12 @@ ARGS:
 
 Visit [x-callback-url Apps](http://x-callback-url.com/apps/) or the corresponding documentation for apps you have installed on your Mac to find x-callback-url APIs you can call with callback.
 
+## Troubleshooting
+
+* Double check the documentation for the callback url you are calling
+* See if callback is running `$ ps -ax | grep callback.app` 
+* Kill any instances of callback `$ killall callback` 
+
 ## License
 
 Licensed under either of
