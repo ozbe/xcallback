@@ -19,7 +19,7 @@ $ echo "callback() { $(pwd)/callback.app/Contents/MacOS/callback \"\$@\" ;}" >> 
 
 ```bash
 $ sed -i old '/^callback\(\)/d' ~/.zshrc && source ~/.zshrc
-```****
+```
 
 ## Usage
 
@@ -58,7 +58,7 @@ ARGS:
             Space delimited URL encoded x-callback-url parameters Example: title=My%20Note%20Title text=First%20line
 ```
 
-Check out [x-callback-url Apps](http://x-callback-url.com/apps/) or the documentation for apps you have installed on your Mac to find x-callback-url APIs you can call with callback.
+Visit [x-callback-url Apps](http://x-callback-url.com/apps/) or the corresponding documentation for apps you have installed on your Mac to find x-callback-url APIs you can call with callback.
 
 ## License
 
