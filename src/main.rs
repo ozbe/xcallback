@@ -7,7 +7,6 @@ use macos::{impl_objc_class, nil, Id, ObjCClass};
 use objc::declare::ClassDecl;
 use objc::runtime::*;
 use std::ops::Deref;
-use std::process::{Command, Output};
 use std::sync::mpsc::Sender;
 use std::sync::{mpsc, Once};
 use std::thread;
@@ -55,7 +54,7 @@ fn cli() {
     let opts = CallbackOpts::from_args();
     let url = opts_to_url(&opts);
 
-    let _ = execute(&url).unwrap();
+    execute(&url);
 
     let result = receiver.recv().unwrap();
     println!("{}", result);
@@ -75,8 +74,9 @@ fn terminate_ns_app() {
     unsafe { msg_send![app.ptr(), terminate: nil] }
 }
 
-fn execute(url: &str) -> Result<Output, std::io::Error> {
-    Command::new("open").arg(url).output()
+fn execute(url: &str) {
+    NSWorkspace::shared_workspace()
+        .open_url(NSURL::from(NSString::from(url)))
 }
 
 fn opts_to_url(opts: &CallbackOpts) -> String {
