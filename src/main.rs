@@ -6,6 +6,7 @@ extern crate objc;
 
 mod cli;
 mod macos;
+mod x_callback_url;
 
 use std::sync::mpsc;
 use std::thread;

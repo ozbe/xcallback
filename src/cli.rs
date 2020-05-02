@@ -1,3 +1,4 @@
+use crate::x_callback_url::*;
 use std::sync::mpsc::Receiver;
 use structopt::StructOpt;
 use url::Url;
@@ -28,29 +29,29 @@ struct CallbackOpts {
     parameters: Vec<(String, String)>,
 }
 
-const HOST: &str = "x-callback-url";
+const CALLBACK_SCHEME: &str = "callback";
 const CALLBACK_SOURCE: &str = "callback";
 const RELATIVE_PATH_SUCCESS: &str = "success";
 const RELATIVE_PATH_ERROR: &str = "error";
 const RELATIVE_PATH_CANCEL: &str = "cancel";
-const CALLBACK_PARAM_KEY_SOURCE: &str = "x-source";
-const CALLBACK_PARAM_KEY_SUCCESS: &str = "x-success";
-const CALLBACK_PARAM_KEY_ERROR: &str = "x-error";
-const CALLBACK_PARAM_KEY_CANCEL: &str = "x-cancel";
 
 lazy_static! {
-    static ref CALLBACK_URL_BASE: Url = {
-        // The stand-in `action` in the path serves to avoid a problem where Url
-        // parses the Url successfully, but when a path is set later, the Url
-        // serialization is missing the '/` between the host and path.
-        let mut url = Url::parse("callback://x-callback-url/action").unwrap();
-        url.set_path("");
-        url
+    static ref CALLBACK_URL_BASE: XCallbackUrl = { XCallbackUrl::new(CALLBACK_SCHEME) };
+    static ref CALLBACK_URL_SUCCESS: XCallbackUrl = {
+        let mut callback_url = CALLBACK_URL_BASE.clone();
+        callback_url.set_action(RELATIVE_PATH_SUCCESS);
+        callback_url
     };
-    static ref CALLBACK_URL_SUCCESS: Url =
-        { CALLBACK_URL_BASE.join(RELATIVE_PATH_SUCCESS).unwrap() };
-    static ref CALLBACK_URL_ERROR: Url = { CALLBACK_URL_BASE.join(RELATIVE_PATH_ERROR).unwrap() };
-    static ref CALLBACK_URL_CANCEL: Url = { CALLBACK_URL_BASE.join(RELATIVE_PATH_CANCEL).unwrap() };
+    static ref CALLBACK_URL_ERROR: XCallbackUrl = {
+        let mut callback_url = CALLBACK_URL_BASE.clone();
+        callback_url.set_action(RELATIVE_PATH_ERROR);
+        callback_url
+    };
+    static ref CALLBACK_URL_CANCEL: XCallbackUrl = {
+        let mut callback_url = CALLBACK_URL_BASE.clone();
+        callback_url.set_action(RELATIVE_PATH_CANCEL);
+        callback_url
+    };
 }
 
 pub fn run(receiver: Receiver<String>, execute: &dyn Fn(&Url) -> ()) {
@@ -64,25 +65,22 @@ pub fn run(receiver: Receiver<String>, execute: &dyn Fn(&Url) -> ()) {
 }
 
 fn opts_to_url(opts: &CallbackOpts) -> Url {
-    let mut url = Url::parse(&format!(
-        "{scheme}://{host}/{action}",
-        scheme = opts.scheme,
-        host = HOST,
-        action = opts.action,
-    ))
-    .unwrap();
-
-    let callback_parameters = vec![
+    let mut callback_url = XCallbackUrl::new(&opts.scheme);
+    callback_url.set_action(&opts.action);
+    let callback_parameters = [
         (CALLBACK_PARAM_KEY_SOURCE, CALLBACK_SOURCE),
         (CALLBACK_PARAM_KEY_SUCCESS, CALLBACK_URL_SUCCESS.as_str()),
         (CALLBACK_PARAM_KEY_ERROR, CALLBACK_URL_ERROR.as_str()),
         (CALLBACK_PARAM_KEY_CANCEL, CALLBACK_URL_CANCEL.as_str()),
     ];
+    let action_params: Vec<(&str, &str)> = opts
+        .parameters
+        .iter()
+        .map(|(k, v)| (k.as_ref(), v.as_ref()))
+        .collect();
 
-    url.query_pairs_mut()
-        .extend_pairs(&opts.parameters)
-        .extend_pairs(&callback_parameters);
-    url
+    callback_url.set_params(action_params.iter().chain(callback_parameters.iter()));
+    callback_url.to_url()
 }
 
 fn parse_parameter(src: &str) -> Result<(String, String), String> {
