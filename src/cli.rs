@@ -54,17 +54,14 @@ lazy_static! {
     };
 }
 
-pub fn run(receiver: Receiver<String>, execute: &dyn Fn(&Url) -> ()) {
+pub fn run(client: &dyn XCallbackClient) {
     let opts = CallbackOpts::from_args();
     let execute_url = opts_to_url(&opts);
-    execute(&execute_url);
-
-    let result = receiver.recv().unwrap();
-    let callback_url = Url::parse(&result).unwrap();
-    print_url(&callback_url);
+    let response = client.execute(&execute_url).unwrap();
+    print_response(&response);
 }
 
-fn opts_to_url(opts: &CallbackOpts) -> Url {
+fn opts_to_url(opts: &CallbackOpts) -> XCallbackUrl {
     let mut callback_url = XCallbackUrl::new(&opts.scheme);
     callback_url.set_action(&opts.action);
     let callback_parameters = [
@@ -80,7 +77,7 @@ fn opts_to_url(opts: &CallbackOpts) -> Url {
         .collect();
 
     callback_url.set_params(action_params.iter().chain(callback_parameters.iter()));
-    callback_url.to_url()
+    callback_url
 }
 
 fn parse_parameter(src: &str) -> Result<(String, String), String> {
@@ -91,14 +88,18 @@ fn parse_parameter(src: &str) -> Result<(String, String), String> {
     }
 }
 
-fn print_url(url: &Url) {
-    println!("{}", url.path().trim_start_matches('/'));
+fn print_response(response: &XCallbackResponse) {
+    let params = match response {
+        XCallbackResponse::Success { params } => params,
+        XCallbackResponse::Error { params } => params,
+        XCallbackResponse::Cancel { params } => params,
+    };
 
-    if let Some(query) = url.query() {
-        for parameter in query.split('&') {
-            if !parameter.is_empty() {
-                println!("{}", parameter)
-            }
+    // println!("{}", response.);
+
+    for (k, v) in params {
+        if !v.is_empty() {
+            println!("{}={}", k, v)
         }
     }
 }

@@ -10,12 +10,12 @@ mod x_callback_url;
 
 use std::sync::mpsc;
 use std::thread;
+use crate::macos::NSXCallbackClient;
 
 fn main() {
-    let (sender, receiver) = mpsc::channel();
     thread::spawn(move || {
-        cli::run(receiver, &macos::open);
+        cli::run(&NSXCallbackClient::new());
         macos::terminate_app();
     });
-    macos::run_app(sender);
+    macos::run_app();
 }

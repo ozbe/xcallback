@@ -1,5 +1,6 @@
 use std::borrow::{Borrow, Cow};
 use url::Url;
+use std::error::Error;
 
 const CALLBACK_HOST: &str = "x-callback-url";
 pub const CALLBACK_PARAM_KEY_SOURCE: &str = "x-source";
@@ -14,6 +15,14 @@ pub struct XCallbackUrl {
 
 #[allow(dead_code)]
 impl XCallbackUrl {
+    pub fn parse(input: &str) -> Result<XCallbackUrl, Box<dyn Error>> {
+        // FIXME - return errors
+        let url = Url::parse(input).unwrap();
+        assert_eq!(url.host_str().unwrap(), CALLBACK_HOST);
+        assert!(!url.cannot_be_a_base());
+        Ok(XCallbackUrl { url })
+    }
+
     pub fn new(scheme: &str) -> Self {
         // The stand-in `action` in the path serves to avoid a problem where Url
         // parses the Url successfully, but when a path is set later, the Url
@@ -59,6 +68,14 @@ impl XCallbackUrl {
         self.url.query_pairs_mut().clear().extend_pairs(params);
     }
 
+
+    pub fn source(&self) -> Option<String> {
+        self.url
+            .query_pairs()
+            .find(|(k, _)| k == CALLBACK_PARAM_KEY_SOURCE)
+            .map(|(_, v)| v.to_string())
+    }
+
     pub fn as_str(&self) -> &str {
         self.url.as_str()
     }
@@ -66,4 +83,14 @@ impl XCallbackUrl {
     pub fn to_url(&self) -> Url {
         self.url.clone()
     }
+}
+
+pub enum XCallbackResponse {
+    Success { params: Vec<(String, String)> },
+    Error { params: Vec<(String, String)> },
+    Cancel { params: Vec<(String, String)> },
+}
+
+pub trait XCallbackClient {
+    fn execute(&self, url: &XCallbackUrl) -> Result<XCallbackResponse, Box<dyn Error>>;
 }

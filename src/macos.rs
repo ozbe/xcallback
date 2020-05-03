@@ -3,14 +3,21 @@ use ::macos::foundation::*;
 use ::macos::{impl_objc_class, Id, ObjCClass};
 use objc::declare::ClassDecl;
 use objc::runtime::*;
-use std::sync::mpsc::Sender;
-use std::sync::Once;
+use std::sync::mpsc::{Sender, Receiver};
+use std::sync::{Once, mpsc};
 use url::Url;
+use crate::x_callback_url::{XCallbackClient, XCallbackUrl, XCallbackResponse};
+use std::error::Error;
+use std::collections::HashMap;
+use std::sync::Mutex;
+use rand::{thread_rng, Rng};
+use rand::distributions::Alphanumeric;
 
-static mut SENDER: Option<Sender<String>> = None;
+lazy_static! {
+    static ref SENDERS: Mutex<HashMap<String, Sender<String>>> = Mutex::new(HashMap::new());
+}
 
-pub fn run_app(sender: Sender<String>) {
-    unsafe { SENDER = Some(sender) };
+pub fn run_app() {
     let delegate = AppDelegate::new();
     let app = nsapp();
     app.set_delegate(&delegate);
@@ -22,7 +29,51 @@ pub fn terminate_app() {
     app.terminate(&app);
 }
 
-pub fn open(url: &Url) {
+pub struct NSXCallbackClient {
+    key: String,
+    receiver: Receiver<String>,
+}
+
+impl NSXCallbackClient {
+    pub fn new() -> NSXCallbackClient {
+        let key = NSXCallbackClient::generate_key();
+        let (sender, receiver) = mpsc::channel();
+
+       NSXCallbackClient::store_sender(&key, sender);
+
+        NSXCallbackClient {
+            key,
+            receiver,
+        }
+    }
+
+    fn store_sender(key: &str, sender: Sender<String>) {
+        SENDERS.lock()
+            .unwrap()
+            .insert(key.to_string(), sender);
+    }
+
+    fn generate_key() -> String {
+        thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(32)
+            .collect()
+    }
+}
+
+impl XCallbackClient for NSXCallbackClient {
+    fn execute(&self, url: &XCallbackUrl) -> Result<XCallbackResponse, Box<dyn Error>> {
+        // TODO - set x-source
+
+        open(&url.to_url());
+
+        let _url = self.receiver.recv()?;
+        // TODO - parse
+        Ok(XCallbackResponse::Success { params: vec![] })
+    }
+}
+
+fn open(url: &Url) {
     NSWorkspace::shared_workspace().open_url(NSURL::from(NSString::from(url.as_str())))
 }
 
@@ -55,9 +106,14 @@ impl Default for AppDelegate {
             ) {
                 let url = NSAppleEventDescriptor::from_ptr(event)
                     .and_then(|event| event.url_param_value())
-                    .and_then(|url| url.as_str());
-                let sender = unsafe { SENDER.as_ref().clone().unwrap() };
-                sender.send(url.unwrap().to_string()).unwrap();
+                    .and_then(|url| url.as_str())
+                    .and_then(|s| XCallbackUrl::parse(s).ok())
+                    .unwrap();
+
+                let senders = SENDERS.lock().unwrap();
+                let sender = senders.get(&url.source().unwrap()).unwrap();
+
+                sender.send(url.as_str().to_string()).unwrap();
             }
 
             unsafe {
