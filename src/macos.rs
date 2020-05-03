@@ -6,12 +6,38 @@ use objc::runtime::*;
 use std::sync::mpsc::{Sender, Receiver};
 use std::sync::{Once, mpsc};
 use url::Url;
-use crate::x_callback_url::{XCallbackClient, XCallbackUrl, XCallbackResponse};
+use crate::x_callback_url::*;
 use std::error::Error;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
+use std::borrow::{Borrow, Cow};
+use std::fmt::{Display, Formatter};
+
+const CALLBACK_SCHEME: &str = "callback";
+const RELATIVE_PATH_SUCCESS: &str = "success";
+const RELATIVE_PATH_ERROR: &str = "error";
+const RELATIVE_PATH_CANCEL: &str = "cancel";
+
+lazy_static! {
+    static ref CALLBACK_URL_BASE: XCallbackUrl = { XCallbackUrl::new(CALLBACK_SCHEME) };
+    static ref CALLBACK_URL_SUCCESS: XCallbackUrl = {
+        let mut callback_url = CALLBACK_URL_BASE.clone();
+        callback_url.set_action(RELATIVE_PATH_SUCCESS);
+        callback_url
+    };
+    static ref CALLBACK_URL_ERROR: XCallbackUrl = {
+        let mut callback_url = CALLBACK_URL_BASE.clone();
+        callback_url.set_action(RELATIVE_PATH_ERROR);
+        callback_url
+    };
+    static ref CALLBACK_URL_CANCEL: XCallbackUrl = {
+        let mut callback_url = CALLBACK_URL_BASE.clone();
+        callback_url.set_action(RELATIVE_PATH_CANCEL);
+        callback_url
+    };
+}
 
 lazy_static! {
     static ref SENDERS: Mutex<HashMap<String, Sender<String>>> = Mutex::new(HashMap::new());
@@ -63,15 +89,49 @@ impl NSXCallbackClient {
 
 impl XCallbackClient for NSXCallbackClient {
     fn execute(&self, url: &XCallbackUrl) -> Result<XCallbackResponse, Box<dyn Error>> {
-        // TODO - set x-source
+        let mut callback_url = url.clone();
+        let action_params: Vec<(String, String)> = callback_url
+            .action_params()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        let callback_parameters = [
+            (CALLBACK_PARAM_KEY_SOURCE.to_string(), self.key.clone()),
+            (CALLBACK_PARAM_KEY_SUCCESS.to_string(), CALLBACK_URL_SUCCESS.as_str().to_string()),
+            (CALLBACK_PARAM_KEY_ERROR.to_string(), CALLBACK_URL_ERROR.as_str().to_string()),
+            (CALLBACK_PARAM_KEY_CANCEL.to_string(), CALLBACK_URL_CANCEL.as_str().to_string()),
+        ];
+        callback_url.set_params(
+            action_params.iter().chain(callback_parameters.iter())
+        );
 
-        open(&url.to_url());
+        open(&callback_url.to_url());
 
-        let _url = self.receiver.recv()?;
-        // TODO - parse
-        Ok(XCallbackResponse::Success { params: vec![] })
+        let url = self.receiver.recv()?;
+        let callback_url = XCallbackUrl::parse(&url).unwrap();
+
+        match callback_url.action() {
+            RELATIVE_PATH_SUCCESS => Ok(XCallbackResponse::Success { params: vec![] }),
+            RELATIVE_PATH_ERROR => Ok(XCallbackResponse::Error { params: vec![] }),
+            RELATIVE_PATH_CANCEL => Ok(XCallbackResponse::Cancel { params: vec![] }),
+            action => Err(Box::new((XCallbackError::InvalidAction(action.to_string())))),
+        }
     }
 }
+
+#[derive(Debug)]
+pub enum XCallbackError {
+    InvalidAction(String),
+}
+
+impl Display for XCallbackError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            XCallbackError::InvalidAction(action) => f.write_fmt(format_args!("Invalid action: {}", action))
+        }
+    }
+}
+
+impl Error for XCallbackError {}
 
 fn open(url: &Url) {
     NSWorkspace::shared_workspace().open_url(NSURL::from(NSString::from(url.as_str())))

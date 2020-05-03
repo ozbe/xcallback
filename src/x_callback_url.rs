@@ -47,7 +47,7 @@ impl XCallbackUrl {
     }
 
     pub fn action(&self) -> &str {
-        &self.url.path()[1..]
+        &self.url.path()[1..] // FIXME - what if there is no action?
     }
 
     pub fn set_action(&mut self, action: &str) {
@@ -68,6 +68,11 @@ impl XCallbackUrl {
         self.url.query_pairs_mut().clear().extend_pairs(params);
     }
 
+    pub fn action_params(&self) -> impl Iterator<Item = (Cow<str>, Cow<str>)> {
+        self.url
+            .query_pairs()
+            .filter(|p| !XCallbackUrl::is_callback_param(p))
+    }
 
     pub fn source(&self) -> Option<String> {
         self.url
@@ -82,6 +87,10 @@ impl XCallbackUrl {
 
     pub fn to_url(&self) -> Url {
         self.url.clone()
+    }
+
+    fn is_callback_param<T: AsRef<str>>((k, _): &(T, T)) -> bool {
+        k.as_ref().starts_with("x-")
     }
 }
 
