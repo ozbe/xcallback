@@ -1,7 +1,5 @@
 use crate::x_callback_url::*;
-use std::sync::mpsc::Receiver;
 use structopt::StructOpt;
-use url::Url;
 
 #[derive(Debug, StructOpt)]
 /// Interact with x-callback-url APIs
@@ -56,15 +54,15 @@ fn print_response(response: &XCallbackResponse) {
         XCallbackResponse::Success { params } => {
             println!("success");
             params
-        },
+        }
         XCallbackResponse::Error { params } => {
             println!("error");
             params
-        },
+        }
         XCallbackResponse::Cancel { params } => {
             println!("cancel");
             params
-        },
+        }
     };
 
     for (k, v) in params {

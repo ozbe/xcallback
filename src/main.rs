@@ -8,9 +8,8 @@ mod cli;
 mod macos;
 mod x_callback_url;
 
-use std::sync::mpsc;
-use std::thread;
 use crate::macos::NSXCallbackClient;
+use std::thread;
 
 fn main() {
     thread::spawn(move || {

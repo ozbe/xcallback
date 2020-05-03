@@ -1,6 +1,6 @@
 use std::borrow::{Borrow, Cow};
-use url::Url;
 use std::error::Error;
+use url::Url;
 
 const CALLBACK_HOST: &str = "x-callback-url";
 pub const CALLBACK_PARAM_KEY_SOURCE: &str = "x-source";

@@ -1,19 +1,18 @@
+use crate::x_callback_url::*;
 use ::macos::appkit::*;
 use ::macos::foundation::*;
 use ::macos::{impl_objc_class, Id, ObjCClass};
 use objc::declare::ClassDecl;
 use objc::runtime::*;
-use std::sync::mpsc::{Sender, Receiver};
-use std::sync::{Once, mpsc};
-use url::Url;
-use crate::x_callback_url::*;
-use std::error::Error;
-use std::collections::HashMap;
-use std::sync::Mutex;
-use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
-use std::borrow::{Borrow, Cow};
+use rand::{thread_rng, Rng};
+use std::collections::HashMap;
+use std::error::Error;
 use std::fmt::{Display, Formatter};
+use std::sync::mpsc::{Receiver, Sender};
+use std::sync::Mutex;
+use std::sync::{mpsc, Once};
+use url::Url;
 
 const CALLBACK_SCHEME: &str = "callback";
 const RELATIVE_PATH_SUCCESS: &str = "success";
@@ -65,25 +64,17 @@ impl NSXCallbackClient {
         let key = NSXCallbackClient::generate_key();
         let (sender, receiver) = mpsc::channel();
 
-       NSXCallbackClient::store_sender(&key, sender);
+        NSXCallbackClient::store_sender(&key, sender);
 
-        NSXCallbackClient {
-            key,
-            receiver,
-        }
+        NSXCallbackClient { key, receiver }
     }
 
     fn store_sender(key: &str, sender: Sender<String>) {
-        SENDERS.lock()
-            .unwrap()
-            .insert(key.to_string(), sender);
+        SENDERS.lock().unwrap().insert(key.to_string(), sender);
     }
 
     fn generate_key() -> String {
-        thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(32)
-            .collect()
+        thread_rng().sample_iter(&Alphanumeric).take(32).collect()
     }
 }
 
@@ -96,13 +87,20 @@ impl XCallbackClient for NSXCallbackClient {
             .collect();
         let callback_parameters = [
             (CALLBACK_PARAM_KEY_SOURCE.to_string(), self.key.clone()),
-            (CALLBACK_PARAM_KEY_SUCCESS.to_string(), CALLBACK_URL_SUCCESS.as_str().to_string()),
-            (CALLBACK_PARAM_KEY_ERROR.to_string(), CALLBACK_URL_ERROR.as_str().to_string()),
-            (CALLBACK_PARAM_KEY_CANCEL.to_string(), CALLBACK_URL_CANCEL.as_str().to_string()),
+            (
+                CALLBACK_PARAM_KEY_SUCCESS.to_string(),
+                CALLBACK_URL_SUCCESS.as_str().to_string(),
+            ),
+            (
+                CALLBACK_PARAM_KEY_ERROR.to_string(),
+                CALLBACK_URL_ERROR.as_str().to_string(),
+            ),
+            (
+                CALLBACK_PARAM_KEY_CANCEL.to_string(),
+                CALLBACK_URL_CANCEL.as_str().to_string(),
+            ),
         ];
-        callback_url.set_params(
-            action_params.iter().chain(callback_parameters.iter())
-        );
+        callback_url.set_params(action_params.iter().chain(callback_parameters.iter()));
 
         open(&callback_url.to_url());
 
@@ -113,7 +111,9 @@ impl XCallbackClient for NSXCallbackClient {
             RELATIVE_PATH_SUCCESS => Ok(XCallbackResponse::Success { params: vec![] }),
             RELATIVE_PATH_ERROR => Ok(XCallbackResponse::Error { params: vec![] }),
             RELATIVE_PATH_CANCEL => Ok(XCallbackResponse::Cancel { params: vec![] }),
-            action => Err(Box::new((XCallbackError::InvalidAction(action.to_string())))),
+            action => Err(Box::new(
+                XCallbackError::InvalidAction(action.to_string()),
+            )),
         }
     }
 }
@@ -126,7 +126,9 @@ pub enum XCallbackError {
 impl Display for XCallbackError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            XCallbackError::InvalidAction(action) => f.write_fmt(format_args!("Invalid action: {}", action))
+            XCallbackError::InvalidAction(action) => {
+                f.write_fmt(format_args!("Invalid action: {}", action))
+            }
         }
     }
 }
