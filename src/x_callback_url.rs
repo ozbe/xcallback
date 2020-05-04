@@ -162,11 +162,15 @@ impl ToString for XCallbackUrl {
     }
 }
 
-// TODO - rethink this response if the params are the same
-pub enum XCallbackResponse {
-    Success { action_params: Vec<XCallbackParam> },
-    Error { action_params: Vec<XCallbackParam> },
-    Cancel { action_params: Vec<XCallbackParam> },
+pub struct XCallbackResponse {
+    pub status: XCallbackStatus,
+    pub action_params: Vec<XCallbackParam>,
+}
+
+pub enum XCallbackStatus {
+    Success,
+    Error,
+    Cancel,
 }
 
 pub trait XCallbackClient {

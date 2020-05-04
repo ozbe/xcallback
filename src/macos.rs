@@ -20,7 +20,7 @@ const CALLBACK_ACTION_CANCEL: &str = "cancel";
 const CALLBACK_PARAM_KEY_CALLBACK_ID: &str = "callback_id";
 
 lazy_static! {
-    static ref CALLBACK_URL_BASE: XCallbackUrl = { XCallbackUrl::new(CALLBACK_SCHEME) };
+    static ref CALLBACK_URL_BASE: XCallbackUrl = XCallbackUrl::new(CALLBACK_SCHEME);
 }
 
 lazy_static! {
@@ -109,18 +109,22 @@ impl NSXCallbackClient {
     fn callback_url_to_response(
         callback_url: XCallbackUrl,
     ) -> Result<XCallbackResponse, Box<dyn Error>> {
+        let status = match callback_url.action() {
+            CALLBACK_ACTION_SUCCESS => XCallbackStatus::Success,
+            CALLBACK_ACTION_ERROR => XCallbackStatus::Error,
+            CALLBACK_ACTION_CANCEL => XCallbackStatus::Cancel,
+            action => return Err(Box::new(XCallbackError::InvalidAction(action.to_string()))),
+        };
         let action_params = callback_url
             .action_params()
             .filter(|(k, _)| k != CALLBACK_PARAM_KEY_CALLBACK_ID)
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
 
-        match callback_url.action() {
-            CALLBACK_ACTION_SUCCESS => Ok(XCallbackResponse::Success { action_params }),
-            CALLBACK_ACTION_ERROR => Ok(XCallbackResponse::Error { action_params }),
-            CALLBACK_ACTION_CANCEL => Ok(XCallbackResponse::Cancel { action_params }),
-            action => Err(Box::new(XCallbackError::InvalidAction(action.to_string()))),
-        }
+        Ok(XCallbackResponse {
+            status,
+            action_params,
+        })
     }
 }
 
@@ -132,7 +136,7 @@ impl XCallbackClient for NSXCallbackClient {
     }
 }
 
-fn open(url: &XCallbackUrl) {
+pub fn open(url: &XCallbackUrl) {
     NSWorkspace::shared_workspace().open_url(NSURL::from(NSString::from(&url.to_string())))
 }
 
@@ -158,7 +162,7 @@ impl Default for AppDelegate {
             }
 
             extern "C" fn event_handler_handle_get_url(
-                _: &mut Object,
+                _this: &mut Object,
                 _cmd: Sel,
                 event: Id,
                 _reply_event: Id,
@@ -168,14 +172,13 @@ impl Default for AppDelegate {
                     .and_then(|url| url.as_str())
                     .and_then(|s| XCallbackUrl::parse(s).ok())
                     .unwrap();
-
-                let senders = SENDERS.lock().unwrap();
                 let callback_id = url
                     .action_params()
                     .find(|(k, _)| k == CALLBACK_PARAM_KEY_CALLBACK_ID)
                     .unwrap()
                     .1
                     .to_string();
+                let senders = SENDERS.lock().unwrap();
                 let sender = senders.get(&callback_id).unwrap();
 
                 sender.send(url).unwrap();

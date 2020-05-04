@@ -69,22 +69,14 @@ fn parse_parameter(src: &str) -> Result<(String, String), String> {
 }
 
 fn print_response(response: &XCallbackResponse) {
-    let params = match response {
-        XCallbackResponse::Success { action_params } => {
-            println!("success");
-            action_params
-        }
-        XCallbackResponse::Error { action_params } => {
-            println!("error");
-            action_params
-        }
-        XCallbackResponse::Cancel { action_params } => {
-            println!("cancel");
-            action_params
-        }
+    let status = match response.status {
+        XCallbackStatus::Success => "success",
+        XCallbackStatus::Error => "error",
+        XCallbackStatus::Cancel => "cancel",
     };
+    println!("{}", status);
 
-    for (k, v) in params {
+    for (k, v) in &response.action_params {
         if !v.is_empty() {
             println!("{}={}", k, v)
         }
