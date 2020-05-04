@@ -11,7 +11,6 @@ use std::error::Error;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Mutex;
 use std::sync::{mpsc, Once};
-use url::Url;
 
 const CALLBACK_SCHEME: &str = "callback";
 const CALLBACK_SOURCE: &str = "callback";
@@ -56,6 +55,10 @@ impl NSXCallbackClient {
         }
     }
 
+    fn generate_callback_id() -> String {
+        thread_rng().sample_iter(&Alphanumeric).take(32).collect()
+    }
+
     fn store_sender(callback_id: &str, sender: Sender<XCallbackUrl>) {
         SENDERS
             .lock()
@@ -63,8 +66,11 @@ impl NSXCallbackClient {
             .insert(callback_id.to_string(), sender);
     }
 
-    fn generate_callback_id() -> String {
-        thread_rng().sample_iter(&Alphanumeric).take(32).collect()
+    fn generate_callback_url(&self, url: &XCallbackUrl) -> XCallbackUrl {
+        let mut callback_url = url.clone();
+        let callback_params = self.generate_callback_params();
+        callback_url.set_callback_params(&callback_params);
+        callback_url
     }
 
     fn generate_callback_params(&self) -> Vec<(String, String)> {
@@ -121,13 +127,13 @@ impl NSXCallbackClient {
 impl XCallbackClient for NSXCallbackClient {
     fn execute(&self, url: &XCallbackUrl) -> Result<XCallbackResponse, Box<dyn Error>> {
         let callback_url = self.generate_callback_url(url);
-        open(&callback_url.to_url().unwrap());
+        open(&callback_url);
         self.wait_for_response()
     }
 }
 
-fn open(url: &Url) {
-    NSWorkspace::shared_workspace().open_url(NSURL::from(NSString::from(url.as_str())))
+fn open(url: &XCallbackUrl) {
+    NSWorkspace::shared_workspace().open_url(NSURL::from(NSString::from(&url.to_string())))
 }
 
 impl_objc_class!(AppDelegate);
@@ -194,14 +200,5 @@ impl Default for AppDelegate {
         AppDelegate {
             ptr: unsafe { msg_send![class!(AppDelegate), new] },
         }
-    }
-}
-
-impl NSXCallbackClient {
-    fn generate_callback_url(&self, url: &XCallbackUrl) -> XCallbackUrl {
-        let mut callback_url = url.clone();
-        let callback_params = self.generate_callback_params();
-        callback_url.set_callback_params(&callback_params);
-        callback_url
     }
 }
