@@ -23,8 +23,8 @@ $ sed -i old '/^callback\(\)/d' ~/.zshrc && source ~/.zshrc
 
 ## Usage
 
-Run callback with `callback -h` or `callback --help` to view the latest available flags, arguments and
-commands
+Run callback with `callback -h` or `callback --help` to view the latest available flags, arguments, and
+commands.
 
 ```text
 callback 0.1.0
