@@ -13,7 +13,7 @@ use std::thread;
 
 fn main() {
     thread::spawn(move || {
-        cli::run(&NSXCallbackClient::new());
+        cli::run(NSXCallbackClient::new());
         macos::terminate_app();
     });
     macos::run_app();

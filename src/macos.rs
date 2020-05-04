@@ -8,38 +8,24 @@ use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use std::collections::HashMap;
 use std::error::Error;
-use std::fmt::{Display, Formatter};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Mutex;
 use std::sync::{mpsc, Once};
 use url::Url;
 
 const CALLBACK_SCHEME: &str = "callback";
-const RELATIVE_PATH_SUCCESS: &str = "success";
-const RELATIVE_PATH_ERROR: &str = "error";
-const RELATIVE_PATH_CANCEL: &str = "cancel";
+const CALLBACK_SOURCE: &str = "callback";
+const CALLBACK_ACTION_SUCCESS: &str = "success";
+const CALLBACK_ACTION_ERROR: &str = "error";
+const CALLBACK_ACTION_CANCEL: &str = "cancel";
+const CALLBACK_PARAM_KEY_CALLBACK_ID: &str = "callback_id";
 
 lazy_static! {
     static ref CALLBACK_URL_BASE: XCallbackUrl = { XCallbackUrl::new(CALLBACK_SCHEME) };
-    static ref CALLBACK_URL_SUCCESS: XCallbackUrl = {
-        let mut callback_url = CALLBACK_URL_BASE.clone();
-        callback_url.set_action(RELATIVE_PATH_SUCCESS);
-        callback_url
-    };
-    static ref CALLBACK_URL_ERROR: XCallbackUrl = {
-        let mut callback_url = CALLBACK_URL_BASE.clone();
-        callback_url.set_action(RELATIVE_PATH_ERROR);
-        callback_url
-    };
-    static ref CALLBACK_URL_CANCEL: XCallbackUrl = {
-        let mut callback_url = CALLBACK_URL_BASE.clone();
-        callback_url.set_action(RELATIVE_PATH_CANCEL);
-        callback_url
-    };
 }
 
 lazy_static! {
-    static ref SENDERS: Mutex<HashMap<String, Sender<String>>> = Mutex::new(HashMap::new());
+    static ref SENDERS: Mutex<HashMap<String, Sender<XCallbackUrl>>> = Mutex::new(HashMap::new());
 }
 
 pub fn run_app() {
@@ -55,85 +41,90 @@ pub fn terminate_app() {
 }
 
 pub struct NSXCallbackClient {
-    key: String,
-    receiver: Receiver<String>,
+    callback_id: String,
+    receiver: Receiver<XCallbackUrl>,
 }
 
 impl NSXCallbackClient {
     pub fn new() -> NSXCallbackClient {
-        let key = NSXCallbackClient::generate_key();
+        let callback_id = NSXCallbackClient::generate_callback_id();
         let (sender, receiver) = mpsc::channel();
-
-        NSXCallbackClient::store_sender(&key, sender);
-
-        NSXCallbackClient { key, receiver }
+        NSXCallbackClient::store_sender(&callback_id, sender);
+        NSXCallbackClient {
+            callback_id,
+            receiver,
+        }
     }
 
-    fn store_sender(key: &str, sender: Sender<String>) {
-        SENDERS.lock().unwrap().insert(key.to_string(), sender);
+    fn store_sender(callback_id: &str, sender: Sender<XCallbackUrl>) {
+        SENDERS
+            .lock()
+            .unwrap()
+            .insert(callback_id.to_string(), sender);
     }
 
-    fn generate_key() -> String {
+    fn generate_callback_id() -> String {
         thread_rng().sample_iter(&Alphanumeric).take(32).collect()
+    }
+
+    fn generate_callback_params(&self) -> Vec<(String, String)> {
+        fn generate_callback_url(action: &str, callback_id: &str) -> String {
+            let mut url = CALLBACK_URL_BASE.clone();
+            url.set_action(action);
+            url.append_action_param(CALLBACK_PARAM_KEY_CALLBACK_ID, callback_id);
+            url.to_string()
+        }
+
+        vec![
+            (
+                CALLBACK_PARAM_KEY_SOURCE.to_string(),
+                CALLBACK_SOURCE.to_string(),
+            ),
+            (
+                CALLBACK_PARAM_KEY_SUCCESS.to_string(),
+                generate_callback_url(CALLBACK_ACTION_SUCCESS, &self.callback_id),
+            ),
+            (
+                CALLBACK_PARAM_KEY_ERROR.to_string(),
+                generate_callback_url(CALLBACK_ACTION_ERROR, &self.callback_id),
+            ),
+            (
+                CALLBACK_PARAM_KEY_CANCEL.to_string(),
+                generate_callback_url(CALLBACK_ACTION_CANCEL, &self.callback_id),
+            ),
+        ]
+    }
+
+    fn wait_for_response(&self) -> Result<XCallbackResponse, Box<dyn Error>> {
+        let callback_url = self.receiver.recv()?;
+        NSXCallbackClient::callback_url_to_response(callback_url)
+    }
+
+    fn callback_url_to_response(
+        callback_url: XCallbackUrl,
+    ) -> Result<XCallbackResponse, Box<dyn Error>> {
+        let action_params = callback_url
+            .action_params()
+            .filter(|(k, _)| k != CALLBACK_PARAM_KEY_CALLBACK_ID)
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+
+        match callback_url.action() {
+            CALLBACK_ACTION_SUCCESS => Ok(XCallbackResponse::Success { action_params }),
+            CALLBACK_ACTION_ERROR => Ok(XCallbackResponse::Error { action_params }),
+            CALLBACK_ACTION_CANCEL => Ok(XCallbackResponse::Cancel { action_params }),
+            action => Err(Box::new(XCallbackError::InvalidAction(action.to_string()))),
+        }
     }
 }
 
 impl XCallbackClient for NSXCallbackClient {
     fn execute(&self, url: &XCallbackUrl) -> Result<XCallbackResponse, Box<dyn Error>> {
-        let mut callback_url = url.clone();
-        let action_params: Vec<(String, String)> = callback_url
-            .action_params()
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect();
-        let callback_parameters = [
-            (CALLBACK_PARAM_KEY_SOURCE.to_string(), self.key.clone()),
-            (
-                CALLBACK_PARAM_KEY_SUCCESS.to_string(),
-                CALLBACK_URL_SUCCESS.as_str().to_string(),
-            ),
-            (
-                CALLBACK_PARAM_KEY_ERROR.to_string(),
-                CALLBACK_URL_ERROR.as_str().to_string(),
-            ),
-            (
-                CALLBACK_PARAM_KEY_CANCEL.to_string(),
-                CALLBACK_URL_CANCEL.as_str().to_string(),
-            ),
-        ];
-        callback_url.set_params(action_params.iter().chain(callback_parameters.iter()));
-
-        open(&callback_url.to_url());
-
-        let url = self.receiver.recv()?;
-        let callback_url = XCallbackUrl::parse(&url).unwrap();
-
-        match callback_url.action() {
-            RELATIVE_PATH_SUCCESS => Ok(XCallbackResponse::Success { params: vec![] }),
-            RELATIVE_PATH_ERROR => Ok(XCallbackResponse::Error { params: vec![] }),
-            RELATIVE_PATH_CANCEL => Ok(XCallbackResponse::Cancel { params: vec![] }),
-            action => Err(Box::new(
-                XCallbackError::InvalidAction(action.to_string()),
-            )),
-        }
+        let callback_url = self.generate_callback_url(url);
+        open(&callback_url.to_url().unwrap());
+        self.wait_for_response()
     }
 }
-
-#[derive(Debug)]
-pub enum XCallbackError {
-    InvalidAction(String),
-}
-
-impl Display for XCallbackError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            XCallbackError::InvalidAction(action) => {
-                f.write_fmt(format_args!("Invalid action: {}", action))
-            }
-        }
-    }
-}
-
-impl Error for XCallbackError {}
 
 fn open(url: &Url) {
     NSWorkspace::shared_workspace().open_url(NSURL::from(NSString::from(url.as_str())))
@@ -173,9 +164,15 @@ impl Default for AppDelegate {
                     .unwrap();
 
                 let senders = SENDERS.lock().unwrap();
-                let sender = senders.get(&url.source().unwrap()).unwrap();
+                let callback_id = url
+                    .action_params()
+                    .find(|(k, _)| k == CALLBACK_PARAM_KEY_CALLBACK_ID)
+                    .unwrap()
+                    .1
+                    .to_string();
+                let sender = senders.get(&callback_id).unwrap();
 
-                sender.send(url.as_str().to_string()).unwrap();
+                sender.send(url).unwrap();
             }
 
             unsafe {
@@ -197,5 +194,14 @@ impl Default for AppDelegate {
         AppDelegate {
             ptr: unsafe { msg_send![class!(AppDelegate), new] },
         }
+    }
+}
+
+impl NSXCallbackClient {
+    fn generate_callback_url(&self, url: &XCallbackUrl) -> XCallbackUrl {
+        let mut callback_url = url.clone();
+        let callback_params = self.generate_callback_params();
+        callback_url.set_callback_params(&callback_params);
+        callback_url
     }
 }

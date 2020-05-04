@@ -27,7 +27,7 @@ struct CallbackOpts {
     parameters: Vec<(String, String)>,
 }
 
-pub fn run(client: &dyn XCallbackClient) {
+pub fn run<T: XCallbackClient>(client: T) {
     let opts = CallbackOpts::from_args();
     let execute_url = opts_to_url(&opts);
     let response = client.execute(&execute_url).unwrap();
@@ -37,7 +37,7 @@ pub fn run(client: &dyn XCallbackClient) {
 fn opts_to_url(opts: &CallbackOpts) -> XCallbackUrl {
     let mut callback_url = XCallbackUrl::new(&opts.scheme);
     callback_url.set_action(&opts.action);
-    callback_url.set_params(&opts.parameters);
+    callback_url.set_action_params(&opts.parameters);
     callback_url
 }
 
@@ -51,17 +51,17 @@ fn parse_parameter(src: &str) -> Result<(String, String), String> {
 
 fn print_response(response: &XCallbackResponse) {
     let params = match response {
-        XCallbackResponse::Success { params } => {
+        XCallbackResponse::Success { action_params } => {
             println!("success");
-            params
+            action_params
         }
-        XCallbackResponse::Error { params } => {
+        XCallbackResponse::Error { action_params } => {
             println!("error");
-            params
+            action_params
         }
-        XCallbackResponse::Cancel { params } => {
+        XCallbackResponse::Cancel { action_params } => {
             println!("cancel");
-            params
+            action_params
         }
     };
 
