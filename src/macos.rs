@@ -128,6 +128,12 @@ impl NSXCallbackClient {
     }
 }
 
+impl Drop for NSXCallbackClient {
+    fn drop(&mut self) {
+        SENDERS.lock().unwrap().remove(&self.callback_id);
+    }
+}
+
 impl XCallbackClient for NSXCallbackClient {
     fn execute(&self, url: &XCallbackUrl) -> Result<XCallbackResponse, Box<dyn Error>> {
         let callback_url = self.generate_callback_url(url);
