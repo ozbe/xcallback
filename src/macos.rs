@@ -70,21 +70,21 @@ impl NSXCallbackClient {
         fn generate_callback_url(action: &str, callback_id: &str) -> String {
             let mut url = CALLBACK_URL_BASE.clone();
             url.set_action(action);
-            url.append_action_param(CALLBACK_PARAM_KEY_CALLBACK_ID, callback_id);
+            url.action_params_mut().push(CALLBACK_PARAM_KEY_CALLBACK_ID, callback_id);
             url.to_string()
         }
 
         let mut callback_url = url.clone();
-        callback_url.set_source(Some(CALLBACK_SOURCE));
-        callback_url.set_success(Some(generate_callback_url(
+        callback_url.callback_params_mut().set_source(Some(CALLBACK_SOURCE));
+        callback_url.callback_params_mut().set_success(Some(generate_callback_url(
             CALLBACK_ACTION_SUCCESS,
             &self.callback_id,
         )));
-        callback_url.set_error(Some(generate_callback_url(
+        callback_url.callback_params_mut().set_error(Some(generate_callback_url(
             CALLBACK_ACTION_ERROR,
             &self.callback_id,
         )));
-        callback_url.set_cancel(Some(generate_callback_url(
+        callback_url.callback_params_mut().set_cancel(Some(generate_callback_url(
             CALLBACK_ACTION_CANCEL,
             &self.callback_id,
         )));
@@ -107,6 +107,7 @@ impl NSXCallbackClient {
         };
         let action_params = callback_url
             .action_params()
+            .iter()
             .filter(|(k, _)| k != CALLBACK_PARAM_KEY_CALLBACK_ID)
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
@@ -168,8 +169,10 @@ impl Default for AppDelegate {
                     .and_then(|url| url.as_str())
                     .and_then(|s| XCallbackUrl::parse(s).ok())
                     .unwrap();
+
                 let callback_id = url
                     .action_params()
+                    .iter()
                     .find(|(k, _)| k == CALLBACK_PARAM_KEY_CALLBACK_ID)
                     .unwrap()
                     .1

@@ -56,7 +56,7 @@ pub fn run<T: XCallbackClient>(client: T) {
 fn opts_to_url(opts: &CallbackOpts) -> XCallbackUrl {
     let mut callback_url = XCallbackUrl::new(&opts.scheme);
     callback_url.set_action(&opts.action);
-    callback_url.set_action_params(&opts.parameters);
+    callback_url.action_params_mut().append(&opts.parameters);
     callback_url
 }
 
