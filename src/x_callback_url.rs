@@ -16,10 +16,12 @@ pub struct XCallbackUrl {
     scheme: String,
     action: String,
     action_params: Vec<XCallbackParam>,
-    callback_params: Vec<XCallbackParam>,
+    source: Option<String>,
+    success: Option<String>,
+    error: Option<String>,
+    cancel: Option<String>,
 }
 
-#[allow(dead_code)]
 impl XCallbackUrl {
     pub fn parse(input: &str) -> Result<XCallbackUrl, Box<dyn Error>> {
         let url = Url::parse(input)?;
@@ -37,17 +39,30 @@ impl XCallbackUrl {
             ""
         }
         .to_string();
-        let (callback_params, action_params): (Vec<XCallbackParam>, Vec<XCallbackParam>) = url
-            .query_pairs()
-            .into_owned()
-            .partition(XCallbackUrl::is_callback_param);
 
-        Ok(XCallbackUrl {
+        let mut callback_url = XCallbackUrl {
             scheme,
             action,
-            action_params,
-            callback_params,
-        })
+            action_params: vec![],
+            source: None,
+            success: None,
+            error: None,
+            cancel: None,
+        };
+
+        for (k, v) in url.query_pairs() {
+            match k.as_ref() {
+                CALLBACK_PARAM_KEY_SOURCE => callback_url.source = Some(v.to_string()),
+                CALLBACK_PARAM_KEY_SUCCESS => callback_url.success = Some(v.to_string()),
+                CALLBACK_PARAM_KEY_ERROR => callback_url.error = Some(v.to_string()),
+                CALLBACK_PARAM_KEY_CANCEL => callback_url.cancel = Some(v.to_string()),
+                _ => callback_url
+                    .action_params
+                    .push((k.to_string(), v.to_string())),
+            }
+        }
+
+        Ok(callback_url)
     }
 
     pub fn new(scheme: &str) -> Self {
@@ -55,7 +70,10 @@ impl XCallbackUrl {
             scheme: scheme.to_string(),
             action: "".to_string(),
             action_params: vec![],
-            callback_params: vec![],
+            source: None,
+            success: None,
+            error: None,
+            cancel: None,
         }
     }
 
@@ -106,33 +124,36 @@ impl XCallbackUrl {
             .push((key.to_string(), value.to_string()));
     }
 
-    pub fn callback_params(&self) -> impl Iterator<Item = (Cow<str>, Cow<str>)> {
-        self.callback_params
-            .iter()
-            .map(|(k, v)| (Cow::Borrowed(k.as_str()), Cow::Borrowed(v.as_str())))
+    pub fn source(&self) -> Option<&str> {
+        self.source.as_deref()
     }
 
-    pub fn set_callback_params<I, K, V>(&mut self, callback_params: I)
-    where
-        I: IntoIterator,
-        I::Item: Borrow<(K, V)>,
-        K: ToString,
-        V: ToString,
-    {
-        self.callback_params = callback_params
-            .into_iter()
-            .map(|i| {
-                let (k, v) = i.borrow();
-                (k.to_string(), v.to_string())
-            })
-            .collect();
+    pub fn set_source<T: ToString>(&mut self, source: Option<T>) {
+        self.source = source.map(|s| s.to_string());
     }
 
-    pub fn source(&self) -> Option<String> {
-        self.callback_params
-            .iter()
-            .find(|(k, _)| k == CALLBACK_PARAM_KEY_SOURCE)
-            .map(|(_, v)| v.to_string())
+    pub fn success(&self) -> Option<&str> {
+        self.success.as_deref()
+    }
+
+    pub fn set_success<T: ToString>(&mut self, success: Option<T>) {
+        self.success = success.map(|s| s.to_string());
+    }
+
+    pub fn error(&self) -> Option<&str> {
+        self.error.as_deref()
+    }
+
+    pub fn set_error<T: ToString>(&mut self, error: Option<T>) {
+        self.error = error.map(|s| s.to_string());
+    }
+
+    pub fn cancel(&self) -> Option<&str> {
+        self.cancel.as_deref()
+    }
+
+    pub fn set_cancel<T: ToString>(&mut self, cancel: Option<T>) {
+        self.cancel = cancel.map(|s| s.to_string());
     }
 
     pub fn to_url(&self) -> Result<Url, url::ParseError> {
@@ -143,13 +164,112 @@ impl XCallbackUrl {
             action = self.action,
         ))?;
 
-        let parameters = self.action_params.iter().chain(self.callback_params.iter());
-        url.query_pairs_mut().extend_pairs(parameters);
+        if !self.action_params.is_empty() {
+            url.query_pairs_mut().extend_pairs(&self.action_params);
+        }
+
+        let callback_params: Vec<_> = vec![
+            (CALLBACK_PARAM_KEY_SOURCE, &self.source),
+            (CALLBACK_PARAM_KEY_SUCCESS, &self.success),
+            (CALLBACK_PARAM_KEY_ERROR, &self.error),
+            (CALLBACK_PARAM_KEY_CANCEL, &self.cancel),
+        ]
+        .into_iter()
+        .filter_map(|(k, v)| v.as_ref().map(|v| (k, v)))
+        .collect();
+
+        if !callback_params.is_empty() {
+            url.query_pairs_mut().extend_pairs(callback_params);
+        }
+
         Ok(url)
     }
+}
 
-    fn is_callback_param<T: AsRef<str>>((k, _): &(T, T)) -> bool {
-        k.as_ref().starts_with("x-")
+#[cfg(test)]
+mod test {
+    mod x_callback_url {
+        use crate::x_callback_url::XCallbackUrl;
+
+        #[test]
+        fn test() {
+            let input = "callback://x-callback-url/action\
+                    ?key=value\
+                    &x-success=callback%3A%2F%2Fx-callback-success";
+
+            let url = XCallbackUrl::parse(input).unwrap();
+
+            assert_eq!("callback", url.scheme());
+            assert_eq!("action", url.action());
+            assert_eq!(
+                vec![("key".to_string(), "value".to_string())],
+                url.action_params()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect::<Vec<_>>()
+            );
+            assert_eq!(
+                Some("callback://x-callback-success".to_string()),
+                url.success
+            );
+            assert_eq!(url.to_string(), input);
+        }
+
+        #[test]
+        fn test_no_params() {
+            let input = "callback://x-callback-url/action";
+
+            let url = XCallbackUrl::parse(input).unwrap();
+
+            assert_eq!("callback", url.scheme());
+            assert_eq!("action", url.action());
+            assert_eq!(url.action_params().count(), 0);
+            assert_eq!(url.source, None);
+            assert_eq!(url.success, None);
+            assert_eq!(url.error, None);
+            assert_eq!(url.cancel, None);
+            assert_eq!(url.to_string(), input);
+        }
+
+        #[test]
+        fn test_no_action_params() {
+            let input = "callback://x-callback-url/action\
+                ?x-success=callback%3A%2F%2Fx-callback-success";
+
+            let url = XCallbackUrl::parse(input).unwrap();
+
+            assert_eq!("callback", url.scheme());
+            assert_eq!("action", url.action());
+            assert_eq!(url.action_params().count(), 0);
+            assert_eq!(
+                Some("callback://x-callback-success".to_string()),
+                url.success
+            );
+            assert_eq!(url.to_string(), input);
+        }
+
+        #[test]
+        fn test_no_callback_params() {
+            let input = "callback://x-callback-url/action\
+                ?key=value";
+
+            let url = XCallbackUrl::parse(input).unwrap();
+
+            assert_eq!("callback", url.scheme());
+            assert_eq!("action", url.action());
+            assert_eq!(
+                vec![("key".to_string(), "value".to_string())],
+                url.action_params()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect::<Vec<_>>()
+            );
+            assert_eq!(url.source, None);
+            assert_eq!(url.success, None);
+            assert_eq!(url.error, None);
+            assert_eq!(url.cancel, None);
+            assert_eq!(url.to_string(), input);
+        }
+
+        // test action, scheme, and params
     }
 }
 

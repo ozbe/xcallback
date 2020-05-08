@@ -67,13 +67,6 @@ impl NSXCallbackClient {
     }
 
     fn generate_callback_url(&self, url: &XCallbackUrl) -> XCallbackUrl {
-        let mut callback_url = url.clone();
-        let callback_params = self.generate_callback_params();
-        callback_url.set_callback_params(&callback_params);
-        callback_url
-    }
-
-    fn generate_callback_params(&self) -> Vec<(String, String)> {
         fn generate_callback_url(action: &str, callback_id: &str) -> String {
             let mut url = CALLBACK_URL_BASE.clone();
             url.set_action(action);
@@ -81,24 +74,21 @@ impl NSXCallbackClient {
             url.to_string()
         }
 
-        vec![
-            (
-                CALLBACK_PARAM_KEY_SOURCE.to_string(),
-                CALLBACK_SOURCE.to_string(),
-            ),
-            (
-                CALLBACK_PARAM_KEY_SUCCESS.to_string(),
-                generate_callback_url(CALLBACK_ACTION_SUCCESS, &self.callback_id),
-            ),
-            (
-                CALLBACK_PARAM_KEY_ERROR.to_string(),
-                generate_callback_url(CALLBACK_ACTION_ERROR, &self.callback_id),
-            ),
-            (
-                CALLBACK_PARAM_KEY_CANCEL.to_string(),
-                generate_callback_url(CALLBACK_ACTION_CANCEL, &self.callback_id),
-            ),
-        ]
+        let mut callback_url = url.clone();
+        callback_url.set_source(Some(CALLBACK_SOURCE));
+        callback_url.set_success(Some(generate_callback_url(
+            CALLBACK_ACTION_SUCCESS,
+            &self.callback_id,
+        )));
+        callback_url.set_error(Some(generate_callback_url(
+            CALLBACK_ACTION_ERROR,
+            &self.callback_id,
+        )));
+        callback_url.set_cancel(Some(generate_callback_url(
+            CALLBACK_ACTION_CANCEL,
+            &self.callback_id,
+        )));
+        callback_url
     }
 
     fn wait_for_response(&self) -> Result<XCallbackResponse, Box<dyn Error>> {
