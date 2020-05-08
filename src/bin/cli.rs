@@ -1,23 +1,14 @@
-#[macro_use]
-extern crate lazy_static;
-
-#[macro_use]
-extern crate objc;
-
-mod macos;
-mod x_callback_url;
-
-use crate::macos::NSXCallbackClient;
-use crate::x_callback_url::*;
+use callback::macos::{NSXCallbackClient, run_app, terminate_app};
+use callback::x_callback_url::*;
 use std::thread;
 use structopt::StructOpt;
 
 fn main() {
     thread::spawn(move || {
         run(NSXCallbackClient::new());
-        macos::terminate_app();
+        terminate_app();
     });
-    macos::run_app();
+    run_app();
 }
 
 #[derive(Debug, StructOpt)]
