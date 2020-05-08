@@ -1,3 +1,4 @@
+use crate::client::{XCallbackClient, XCallbackResponse, XCallbackStatus};
 use crate::x_callback_url::*;
 use ::macos::appkit::*;
 use ::macos::foundation::*;
@@ -70,24 +71,33 @@ impl NSXCallbackClient {
         fn generate_callback_url(action: &str, callback_id: &str) -> String {
             let mut url = CALLBACK_URL_BASE.clone();
             url.set_action(action);
-            url.action_params_mut().push(CALLBACK_PARAM_KEY_CALLBACK_ID, callback_id);
+            url.action_params_mut()
+                .push(CALLBACK_PARAM_KEY_CALLBACK_ID, callback_id);
             url.to_string()
         }
 
         let mut callback_url = url.clone();
-        callback_url.callback_params_mut().set_source(Some(CALLBACK_SOURCE));
-        callback_url.callback_params_mut().set_success(Some(generate_callback_url(
-            CALLBACK_ACTION_SUCCESS,
-            &self.callback_id,
-        )));
-        callback_url.callback_params_mut().set_error(Some(generate_callback_url(
-            CALLBACK_ACTION_ERROR,
-            &self.callback_id,
-        )));
-        callback_url.callback_params_mut().set_cancel(Some(generate_callback_url(
-            CALLBACK_ACTION_CANCEL,
-            &self.callback_id,
-        )));
+        callback_url
+            .callback_params_mut()
+            .set_source(Some(CALLBACK_SOURCE));
+        callback_url
+            .callback_params_mut()
+            .set_success(Some(generate_callback_url(
+                CALLBACK_ACTION_SUCCESS,
+                &self.callback_id,
+            )));
+        callback_url
+            .callback_params_mut()
+            .set_error(Some(generate_callback_url(
+                CALLBACK_ACTION_ERROR,
+                &self.callback_id,
+            )));
+        callback_url
+            .callback_params_mut()
+            .set_cancel(Some(generate_callback_url(
+                CALLBACK_ACTION_CANCEL,
+                &self.callback_id,
+            )));
         callback_url
     }
 
@@ -116,6 +126,12 @@ impl NSXCallbackClient {
             status,
             action_params,
         })
+    }
+}
+
+impl Default for NSXCallbackClient {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

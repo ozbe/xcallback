@@ -1,4 +1,5 @@
-use callback::macos::{NSXCallbackClient, run_app, terminate_app};
+use callback::client::{XCallbackClient, XCallbackResponse, XCallbackStatus};
+use callback::macos::{run_app, terminate_app, NSXCallbackClient};
 use callback::x_callback_url::*;
 use std::thread;
 use structopt::StructOpt;

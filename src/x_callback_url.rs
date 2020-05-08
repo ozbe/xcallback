@@ -1,8 +1,8 @@
 use std::borrow::{Borrow, Cow};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use url::Url;
 use std::iter::FromIterator;
+use url::Url;
 
 const CALLBACK_HOST: &str = "x-callback-url";
 pub const CALLBACK_PARAM_KEY_SOURCE: &str = "x-source";
@@ -53,23 +53,24 @@ impl CallbackParams {
 
     pub fn iter(&self) -> CallbackParamsIter {
         let callback_params: Vec<_> = vec![
-                (CALLBACK_PARAM_KEY_SOURCE, &self.source),
-                (CALLBACK_PARAM_KEY_SUCCESS, &self.success),
-                (CALLBACK_PARAM_KEY_ERROR, &self.error),
-                (CALLBACK_PARAM_KEY_CANCEL, &self.cancel),
-            ]
-            .into_iter()
-            .filter_map(|(k, v)| v.as_ref().map(|v| (k, v.as_ref())))
-            .collect();
+            (CALLBACK_PARAM_KEY_SOURCE, &self.source),
+            (CALLBACK_PARAM_KEY_SUCCESS, &self.success),
+            (CALLBACK_PARAM_KEY_ERROR, &self.error),
+            (CALLBACK_PARAM_KEY_CANCEL, &self.cancel),
+        ]
+        .into_iter()
+        .filter_map(|(k, v)| v.as_ref().map(|v| (k, v.as_ref())))
+        .collect();
 
         CallbackParamsIter { callback_params }
     }
 }
 
 impl<T> FromIterator<(T, T)> for CallbackParams
-    where T: ToString
+where
+    T: ToString,
 {
-    fn from_iter<I: IntoIterator<Item=(T, T)>>(iter: I) -> Self {
+    fn from_iter<I: IntoIterator<Item = (T, T)>>(iter: I) -> Self {
         let mut callback_params = CallbackParams::default();
 
         for (k, v) in iter.into_iter() {
@@ -112,11 +113,11 @@ impl ActionParams {
     }
 
     pub fn append<I, K, V>(&mut self, action_params: I)
-        where
-            I: IntoIterator,
-            I::Item: Borrow<(K, V)>,
-            K: ToString,
-            V: ToString,
+    where
+        I: IntoIterator,
+        I::Item: Borrow<(K, V)>,
+        K: ToString,
+        V: ToString,
     {
         let mut action_params = action_params
             .into_iter()
@@ -129,9 +130,9 @@ impl ActionParams {
     }
 
     pub fn push<K, V>(&mut self, key: K, value: V)
-        where
-            K: ToString,
-            V: ToString,
+    where
+        K: ToString,
+        V: ToString,
     {
         self.action_params
             .push((key.to_string(), value.to_string()));
@@ -143,15 +144,16 @@ impl ActionParams {
 
     pub fn iter(&self) -> ActionParamsIter {
         ActionParamsIter {
-            action_params: &self.action_params
+            action_params: &self.action_params,
         }
     }
 }
 
 impl<T> FromIterator<(T, T)> for ActionParams
-    where T: ToString
+where
+    T: ToString,
 {
-    fn from_iter<I: IntoIterator<Item=(T, T)>>(iter: I) -> Self {
+    fn from_iter<I: IntoIterator<Item = (T, T)>>(iter: I) -> Self {
         let action_params = iter
             .into_iter()
             .filter_map(|(k, v)| {
@@ -165,9 +167,7 @@ impl<T> FromIterator<(T, T)> for ActionParams
             })
             .collect();
 
-        ActionParams {
-            action_params
-        }
+        ActionParams { action_params }
     }
 }
 
@@ -182,12 +182,9 @@ impl<'a> Iterator for ActionParamsIter<'a> {
         match self.action_params.first() {
             Some((k, v)) => {
                 self.action_params = &self.action_params[1..];
-                Some((
-                    Cow::Borrowed(k),
-                    Cow::Borrowed(v),
-                ))
-            },
-            None => None
+                Some((Cow::Borrowed(k), Cow::Borrowed(v)))
+            }
+            None => None,
         }
     }
 }
@@ -231,7 +228,7 @@ impl XCallbackUrl {
             scheme,
             action,
             action_params: ActionParams::from_iter(url.query_pairs()),
-            callback_params: CallbackParams::from_iter(url.query_pairs())
+            callback_params: CallbackParams::from_iter(url.query_pairs()),
         })
     }
 
@@ -239,13 +236,15 @@ impl XCallbackUrl {
         XCallbackUrl {
             scheme: scheme.to_string(),
             action: "".to_string(),
-            action_params: ActionParams { action_params: vec![] },
+            action_params: ActionParams {
+                action_params: vec![],
+            },
             callback_params: CallbackParams {
                 source: None,
                 success: None,
                 error: None,
-                cancel: None
-            }
+                cancel: None,
+            },
         }
     }
 
@@ -289,7 +288,8 @@ impl XCallbackUrl {
             action = self.action,
         ))?;
 
-        let query_pairs: Vec<_> = self.action_params
+        let query_pairs: Vec<_> = self
+            .action_params
             .iter()
             .chain(self.callback_params.iter())
             .collect();
@@ -398,21 +398,6 @@ impl ToString for XCallbackUrl {
             .map(|u| u.to_string())
             .unwrap_or_else(|| "".to_string())
     }
-}
-
-pub struct XCallbackResponse {
-    pub status: XCallbackStatus,
-    pub action_params: Vec<(String, String)>,
-}
-
-pub enum XCallbackStatus {
-    Success,
-    Error,
-    Cancel,
-}
-
-pub trait XCallbackClient {
-    fn execute(&self, url: &XCallbackUrl) -> Result<XCallbackResponse, Box<dyn Error>>;
 }
 
 #[derive(Debug)]
